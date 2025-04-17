@@ -1,3 +1,3 @@
-module github.com/PhilRanzato/jprop
+module github.com/mbsulliv/jprop
 
 go 1.23.0
