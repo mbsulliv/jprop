@@ -1,8 +1,12 @@
+//-----------------------------------------------------------------------------
+
 package jprop
 
 import (
 	"testing"
 )
+
+//-----------------------------------------------------------------------------
 
 type testEncoderStruct struct {
 	Name    string            `jprop:"name,omitempty"`
@@ -17,6 +21,8 @@ type addressStruct struct {
 	City    string `jprop:"city,omitempty"`
 	Country string `jprop:"country,omitempty"`
 }
+
+//-----------------------------------------------------------------------------
 
 // TestMarshal tests the Marshal function for various scenarios
 func TestMarshal(t *testing.T) {
@@ -98,3 +104,5 @@ address.city=New York
 		})
 	}
 }
+
+//-----------------------------------------------------------------------------

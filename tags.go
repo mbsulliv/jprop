@@ -1,9 +1,13 @@
+//-----------------------------------------------------------------------------
+
 package jprop
 
 import (
 	"reflect"
 	"strings"
 )
+
+//-----------------------------------------------------------------------------
 
 const (
 	omitEmptyKey = "omitempty"
@@ -13,6 +17,8 @@ type tagOptions struct {
 	name      string
 	omitEmpty bool
 }
+
+//-----------------------------------------------------------------------------
 
 func parseTagOptions(tag string) tagOptions {
 	opts := tagOptions{}
@@ -28,6 +34,8 @@ func parseTagOptions(tag string) tagOptions {
 	}
 	return opts
 }
+
+//--------------------------------------
 
 func isEmptyValue(v reflect.Value) bool {
 	switch v.Kind() {
@@ -46,3 +54,5 @@ func isEmptyValue(v reflect.Value) bool {
 	}
 	return false
 }
+
+//-----------------------------------------------------------------------------

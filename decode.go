@@ -1,3 +1,5 @@
+//-----------------------------------------------------------------------------
+
 package jprop
 
 import (
@@ -7,37 +9,71 @@ import (
 	"strings"
 )
 
-// Unmarshaler defines an interface for unmarshaling properties.
-type Unmarshaler interface {
-	UnmarshalProperties(string) error
-}
+//-----------------------------------------------------------------------------
 
 // Unmarshal loads data from a .properties format into a struct.
 func Unmarshal(data []byte, v interface{}) error {
-	lines := strings.Split(string(data), "\n")
-	val := reflect.ValueOf(v).Elem()
-
-	for _, line := range lines {
-		line = strings.TrimSpace(line)
-		if line == "" || strings.HasPrefix(line, "#") {
-			continue
-		}
-
-		parts := strings.SplitN(line, "=", 2)
-		if len(parts) != 2 {
-			continue
-		}
-
-		key, value := strings.TrimSpace(parts[0]), strings.TrimSpace(parts[1])
-		if err := setValueFromString(val, key, value); err != nil {
-			return err
-		}
+	_, vErr := unmarshal(data, v)
+	if vErr != nil {
+		return vErr
 	}
+
 	return nil
 }
 
+//--------------------------------------
+
+// UnmarshalStrict requires all fields of data to exist in v.
+func UnmarshalStrict(data []byte, v interface{}) error {
+	vLineNotSet, vErr := unmarshal(data, v)
+	if vErr != nil {
+		return vErr
+	}
+	if vLineNotSet != "" {
+		return fmt.Errorf("property failed to be assigned: %q", vLineNotSet)
+	}
+
+	return nil
+}
+
+//--------------------------------------
+
+// unmarshal loads data from a .properties format into a struct.  If any of the
+// property lines can't be set, that line is returned.
+func unmarshal(data []byte, v interface{}) (string, error) {
+	vLineNotSet := ""
+	vLines := strings.Split(string(data), "\n")
+	val := reflect.ValueOf(v).Elem()
+
+	for _, vLine := range vLines {
+		vLine = strings.TrimSpace(vLine)
+		if vLine == "" || strings.HasPrefix(vLine, "#") {
+			continue
+		}
+
+		vParts := strings.SplitN(vLine, "=", 2)
+		if len(vParts) != 2 {
+			continue
+		}
+
+		key, value := strings.TrimSpace(vParts[0]), strings.TrimSpace(vParts[1])
+		vDidSet, vErr := setValueFromString(val, key, value)
+		if vErr != nil {
+			return "", vErr
+		}
+
+		if !vDidSet && (vLineNotSet == "") {
+			vLineNotSet = vLine
+		}
+	}
+
+	return vLineNotSet, nil
+}
+
+//--------------------------------------
+
 // setValueFromString manages the deserialization process.
-func setValueFromString(v reflect.Value, key, value string) error {
+func setValueFromString(v reflect.Value, key, value string) (bool, error) {
 	val := reflect.Indirect(v)
 
 	switch val.Kind() {
@@ -50,7 +86,10 @@ func setValueFromString(v reflect.Value, key, value string) error {
 	}
 }
 
-func setStructValue(val reflect.Value, key, value string) error {
+//--------------------------------------
+
+func setStructValue(val reflect.Value, key, value string) (bool, error) {
+	vDidSet := false
 	typ := val.Type()
 	for i := 0; i < val.NumField(); i++ {
 		field := typ.Field(i)
@@ -61,20 +100,28 @@ func setStructValue(val reflect.Value, key, value string) error {
 			fieldKey = field.Name
 		}
 
+		vDidSetOne := false
 		if strings.HasPrefix(key, fieldKey) {
 			subKey := strings.TrimPrefix(key, fieldKey)
 			if subKey == "" || subKey[0] == '.' {
 				subKey = strings.TrimPrefix(subKey, ".")
-				if err := handleFieldType(fieldValue, subKey, value); err != nil {
-					return err
+				var vErr error
+				vDidSetOne, vErr = handleFieldType(fieldValue, subKey, value)
+				if vErr != nil {
+					return false, vErr
 				}
 			}
 		}
+		if vDidSetOne {
+			vDidSet = true
+		}
 	}
-	return nil
+	return vDidSet, nil
 }
 
-func handleFieldType(fieldValue reflect.Value, subKey, value string) error {
+//--------------------------------------
+
+func handleFieldType(fieldValue reflect.Value, subKey, value string) (bool, error) {
 	switch fieldValue.Kind() {
 	case reflect.Struct:
 		return setValueFromString(fieldValue, subKey, value)
@@ -87,19 +134,29 @@ func handleFieldType(fieldValue reflect.Value, subKey, value string) error {
 	}
 }
 
-func setSliceValue(fieldValue reflect.Value, value string) error {
+//--------------------------------------
+
+func setSliceValue(fieldValue reflect.Value, value string) (bool, error) {
+	vDidSetAll := true
 	items := strings.Split(value, ",")
 	slice := reflect.MakeSlice(fieldValue.Type(), len(items), len(items))
 	for idx, item := range items {
-		if err := setBasicValue(slice.Index(idx), strings.TrimSpace(item)); err != nil {
-			return err
+		vDidSet, vErr := setBasicValue(slice.Index(idx), strings.TrimSpace(item))
+		if vErr != nil {
+			return false, vErr
+		}
+		if !vDidSet {
+			vDidSetAll = false
 		}
 	}
 	fieldValue.Set(slice)
-	return nil
+	return vDidSetAll, nil
 }
 
-func setMapValue(val reflect.Value, key, value string) error {
+//--------------------------------------
+
+func setMapValue(val reflect.Value, key, value string) (bool, error) {
+	vDidSetAll := true
 	mapKey := extractMapKey(key)
 
 	// Initialize the map if it is nil
@@ -111,11 +168,15 @@ func setMapValue(val reflect.Value, key, value string) error {
 	if mapKey == "" {
 		// Set the empty key value
 		mapValue := reflect.New(val.Type().Elem()).Elem()
-		if err := setBasicValue(mapValue, value); err != nil {
-			return err
+		vDidSet, vErr := setBasicValue(mapValue, value)
+		if vErr != nil {
+			return false, vErr
+		}
+		if !vDidSet {
+			vDidSetAll = false
 		}
 		val.SetMapIndex(reflect.ValueOf(mapKey), mapValue)
-		return nil
+		return vDidSetAll, nil
 	}
 
 	// Retrieve the existing value for the given map key
@@ -127,13 +188,19 @@ func setMapValue(val reflect.Value, key, value string) error {
 	}
 
 	// Set the value in the map
-	if err := setBasicValue(mapValue, value); err != nil {
-		return err
+	vDidSet, vErr := setBasicValue(mapValue, value)
+	if vErr != nil {
+		return false, vErr
+	}
+	if !vDidSet {
+		vDidSetAll = false
 	}
 	val.SetMapIndex(reflect.ValueOf(mapKey), mapValue)
 
-	return nil
+	return vDidSetAll, nil
 }
+
+//--------------------------------------
 
 // extractMapKey extracts the key of the map from the given string.
 func extractMapKey(key string) string {
@@ -141,35 +208,44 @@ func extractMapKey(key string) string {
 	return parts[0] // Return only the key part
 }
 
+//--------------------------------------
+
 // setBasicValue sets the value of a basic field type (string, bool, int, float, etc.).
-func setBasicValue(v reflect.Value, value string) error {
+func setBasicValue(v reflect.Value, value string) (bool, error) {
+	vDidSet := false
 	if !v.IsValid() || !v.CanSet() {
-		return fmt.Errorf("invalid or unassignable value provided: %s", v)
+		return false, fmt.Errorf("invalid or unassignable value provided: %s", v)
 	}
 
 	switch v.Kind() {
 	case reflect.String:
 		v.SetString(value)
+		vDidSet = true
 	case reflect.Bool:
-		boolVal, err := strconv.ParseBool(value)
-		if err != nil {
-			return err
+		boolVal, vErr := strconv.ParseBool(value)
+		if vErr != nil {
+			return false, vErr
 		}
 		v.SetBool(boolVal)
+		vDidSet = true
 	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
-		intVal, err := strconv.ParseInt(value, 10, 64)
-		if err != nil {
-			return err
+		intVal, vErr := strconv.ParseInt(value, 10, 64)
+		if vErr != nil {
+			return false, vErr
 		}
 		v.SetInt(intVal)
+		vDidSet = true
 	case reflect.Float32, reflect.Float64:
-		floatVal, err := strconv.ParseFloat(value, 64)
-		if err != nil {
-			return err
+		floatVal, vErr := strconv.ParseFloat(value, 64)
+		if vErr != nil {
+			return false, vErr
 		}
 		v.SetFloat(floatVal)
+		vDidSet = true
 	default:
-		return fmt.Errorf("unsupported type: %s", v.Type())
+		return false, fmt.Errorf("unsupported type: %s", v.Type())
 	}
-	return nil
+	return vDidSet, nil
 }
+
+//-----------------------------------------------------------------------------

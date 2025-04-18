@@ -1,3 +1,5 @@
+//-----------------------------------------------------------------------------
+
 package jprop
 
 import (
@@ -8,9 +10,13 @@ import (
 	"strings"
 )
 
+//-----------------------------------------------------------------------------
+
 type Marshaler interface {
 	MarshalProperties() (string, error)
 }
+
+//-----------------------------------------------------------------------------
 
 // Marshal serializes a struct into a .properties file format
 func Marshal(v interface{}) ([]byte, error) {
@@ -21,6 +27,8 @@ func Marshal(v interface{}) ([]byte, error) {
 	}
 	return buf.Bytes(), nil
 }
+
+//--------------------------------------
 
 // marshalValue handles serialization of structs, maps, and slices
 func marshalValue(val reflect.Value, buf *bytes.Buffer, prefix string) error {
@@ -103,6 +111,8 @@ func marshalValue(val reflect.Value, buf *bytes.Buffer, prefix string) error {
 	return nil
 }
 
+//--------------------------------------
+
 // valueToString converts values into strings
 func valueToString(v reflect.Value) (string, error) {
 	if !v.IsValid() {
@@ -131,3 +141,5 @@ func valueToString(v reflect.Value) (string, error) {
 		return "", fmt.Errorf("unsupported type: %s", v.Type())
 	}
 }
+
+//-----------------------------------------------------------------------------

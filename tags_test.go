@@ -1,9 +1,13 @@
+//-----------------------------------------------------------------------------
+
 package jprop
 
 import (
 	"reflect"
 	"testing"
 )
+
+//-----------------------------------------------------------------------------
 
 func TestParseTagOptions(t *testing.T) {
 	tests := []struct {
@@ -46,6 +50,8 @@ func TestParseTagOptions(t *testing.T) {
 	}
 }
 
+//--------------------------------------
+
 func TestIsEmptyValue(t *testing.T) {
 	tests := []struct {
 		value    interface{}
@@ -77,3 +83,5 @@ func TestIsEmptyValue(t *testing.T) {
 		})
 	}
 }
+
+//-----------------------------------------------------------------------------

@@ -1,9 +1,13 @@
+//-----------------------------------------------------------------------------
+
 package jprop
 
 import (
 	"reflect"
 	"testing"
 )
+
+//-----------------------------------------------------------------------------
 
 // testStruct is used for unmarshalling tests
 type testStruct struct {
@@ -13,6 +17,8 @@ type testStruct struct {
 	Tags   []string          `jprop:"tags"`
 	Props  map[string]string `jprop:"props"`
 }
+
+//-----------------------------------------------------------------------------
 
 func TestUnmarshal(t *testing.T) {
 	type args struct {
@@ -188,3 +194,5 @@ tags=`),
 		})
 	}
 }
+
+//-----------------------------------------------------------------------------
